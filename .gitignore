@@ -1,0 +1,13 @@
+nerc
+test/*.css
+test/*.json
+test/*.htm
+test/*.html
+test/*/*.css
+test/*/*.json
+test/*/*.htm
+test/*/*.html
+test/*/*/*.css
+test/*/*/*.json
+test/*/*/*.htm
+test/*/*/*.html
