@@ -40,6 +40,7 @@ body {
 #header h1 {
     display: block;
     margin-top: auto;
+    margin-right: 20px;
 }
 #header h2 {
     display: block;

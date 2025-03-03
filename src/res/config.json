@@ -1,7 +1,9 @@
 {
     "page title":   "Default nerc site",
-    "links left":   {
-        "Main": "/"
+    "links":   {
+        "Main": "/",
+        "": "SPACER",
+        "nerc": "https://github.com/8bitprodigy/nerc",
     },
     "site title":   "Default nerc site",
     "subtitle":     "These settings can be overridden by putting a config.json file in the root of this nerc site.",

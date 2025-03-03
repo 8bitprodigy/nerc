@@ -33,6 +33,8 @@ type
             label: string
 
 
+proc getConfig(node: DirTreeNode, key: string): JsonNode {.inline.} 
+proc removeSuffixInsensitive(s, suffix: string): string 
 proc convertMarkdownToNercPage(tree: DirTreeNode) 
 proc buildDirTree(node: DirTreeNode, depth: uint)
 proc printTree(tree: DirTreeNode) 
@@ -43,8 +45,7 @@ proc populateDirs(treeRoot: DirTreeNode)
 const
     PageTitleTag:     string = "<!--page title-->"
     StyleOverrideTag: string = "<!--style override-->"
-    LinksLeftTag:     string = "<!--links left-->"
-    LinksRightTag:    string = "<!--links right-->"
+    LinksTag:         string = "<!--links-->"
     SiteTitleTag:     string = "<!--site title-->"
     SubtitleTag:      string = "<!--subtitle-->"
     SidebarTag:       string = "<!--sidebar-->"
@@ -52,9 +53,11 @@ const
     FooterLeftTag:    string = "<!--footer left-->"
     FooterRightTag:   string = "<!--footer right-->"
     
-    htmlTemplate = staticRead("res/template.htm")
-    defaultStyle = staticRead("res/styles.css")
-    defaultJson  = staticRead("res/config.json")
+    DefaultTemplate = staticRead("res/template.htm")
+    DefaultStyle    = staticRead("res/styles.css")
+    DefaultJson     = staticRead("res/config.json")
+
+let DefaultConfig   = parseJson(DefaultJson)
 
 
 var 
@@ -68,19 +71,9 @@ var
     fsTree:          DirTreeNode = DirTreeNode(depth: 0, name: "Main", path: ".", kind: itemDir)
     
 
-fsTree.html   = htmlTemplate
-fsTree.style  = defaultStyle
-fsTree.config = parseJson(defaultJson)
-
-
-proc getConfig(parentDir: DirTreeNode, key: string): JsonNode {.inline.} =
-    if not parentDir.config.isNil and parentDir.config.hasKey(key): 
-        return parentDir.config[key]
-    
-    if parentDir.parent != nil:
-        return getConfig(parentDir.parent, key)
-
-    return %*""
+fsTree.html   = DefaultTemplate
+fsTree.style  = DefaultStyle
+fsTree.config = DefaultConfig
 
 
 proc removeSuffixInsensitive(s, suffix: string): string =
@@ -88,7 +81,46 @@ proc removeSuffixInsensitive(s, suffix: string): string =
         return s[0 ..< s.len - suffix.len]
     return s
 
+
+proc getConfig(node: DirTreeNode, key: string): JsonNode {.inline.} =
+    if not node.config.isNil:
+        if node.config.hasKey(key):
+            return node.config[key]
+
+    if node.parent != nil:
+        return getConfig(node.parent, key)
+
+    return DefaultConfig[key]
+
+
+proc genLinks(node: DirTreeNode): string =
+    var 
+        links:        string   = ""
+        separator:    string   = ""
+        addSeparator: bool     = false
+
+    if node.config.isNil: return node.parent.genLinks()
+    let config:       JsonNode = node.getConfig("links")
     
+    if config.kind != JObject: 
+        echo "[LINKS] Not generating links."
+        return node.parent.genLinks()
+
+    for label, link in config.pairs():
+        separator = if addSeparator: "&nbsp;|&nbsp;" else: ""
+
+        if label == "" and link.getStr() == "SPACER":
+            links = links & "<div class=\"spacer\" ></div>"
+            addSeparator = false
+            continue
+        
+        links = links & separator & "<a href=\"" & link.getStr() & "\">" & label & "</a>"
+        addSeparator = true
+    
+    echo "[LINKS] " & links
+    return links
+
+
 proc convertMarkdownToNercPage(tree: DirTreeNode) =
     echo tree.path[2..^1]  & " : " & tree.name & "\n"
     if tree.kind == itemDir: return
@@ -101,12 +133,13 @@ proc convertMarkdownToNercPage(tree: DirTreeNode) =
     
     let mdFile  = readFile(tree.path[2..^1])
     
-    var htmlTxt = htmlTemplate
+    var htmlTxt = DefaultTemplate
     if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace(PageTitleTag,   tree.parent.getConfig("page title").getStr() & " - " & tree.name)
+    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace(LinksTag,       tree.parent.genLinks())
     if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace(SiteTitleTag,   tree.parent.getConfig("site title").getStr())
     if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace(SubtitleTag,    tree.parent.getConfig("subtitle").getStr())
-    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace(SidebarTag,     genSidebar(fsTree, tree))
-    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace(ContentTag,     markdown(mdFile))
+    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace(SidebarTag,     fsTree.genSidebar(tree))
+    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace(ContentTag,     mdFile.markdown())
     if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace(FooterLeftTag,  tree.parent.getConfig("footer left").getStr())
     if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace(FooterRightTag, tree.parent.getConfig("footer right").getStr())
     
@@ -173,7 +206,7 @@ proc genSidebar(tree: DirTreeNode, currentItem: DirTreeNode): string =
     if tree.kind == itemFile:
         var 
             name = tree.name
-            path = tree.path
+            path = tree.path[1..^1]
             
         if tree.fileKind != fileMarkdown and tree.fileKind != fileHTML: return ""
 
@@ -185,21 +218,25 @@ proc genSidebar(tree: DirTreeNode, currentItem: DirTreeNode): string =
         
         if "index" == toLowerAscii(name): return ""
         if tree == currentItem: name = ">> " & name & " <<"
-        
+
+        echo path
         return repeat('\t', tree.depth) & "<li class=\"page\"><a href=\"" & path & "\">" & name & "</a></li>\n"
         
     elif tree.kind == itemDir:
         var 
             itemList: string
             name = tree.name
+            path = tree.path[1..^1]
         
-        if tree.depth == 0: name = "Main"
+        #if tree.depth == 0: name = "Main"
+        if tree == currentItem: name = ">> " & name & " <<"
         
         for item in tree.contents:
             itemList = itemList & genSidebar(item, currentItem)
-
+        
+        echo path
         itemList = 
-            "<li class=\"dir\"><a href=\"" & tree.path & "\">" & name & "</a>\n" & "<ul>\n" & 
+            "<li class=\"dir\"><a href=\"" & path & "\">" & name & "</a>\n" & "<ul>\n" & 
             itemList & 
             "</ul>\n</li>"
 
