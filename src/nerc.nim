@@ -20,6 +20,7 @@ type
     DirTreeNode = ref object
         depth:  uint
         name:   string
+        label:  string
         path:   string
         parent: DirTreeNode
         case kind: ItemKind
@@ -28,9 +29,9 @@ type
             html:     string
             style:    string
             config:   JsonNode
+            hasIndex: DirTreeNode
         of itemFile:
             fileKind: FileKind
-            label: string
 
 
 proc getConfig(node: DirTreeNode, key: string): JsonNode {.inline.} 
@@ -68,7 +69,7 @@ var
     htmlFooterLeft:  string
     htmlFooterRight: string
     
-    fsTree:          DirTreeNode = DirTreeNode(depth: 0, name: "Main", path: ".", kind: itemDir)
+    fsTree:          DirTreeNode = DirTreeNode(depth: 0, label: "Main", path: ".", kind: itemDir)
     
 
 fsTree.html   = DefaultTemplate
@@ -103,7 +104,7 @@ proc genLinks(node: DirTreeNode): string =
     let config:       JsonNode = node.getConfig("links")
     
     if config.kind != JObject: 
-        echo "[LINKS] Not generating links."
+        #echo "[LINKS] Not generating links."
         return node.parent.genLinks()
 
     for label, link in config.pairs():
@@ -117,8 +118,15 @@ proc genLinks(node: DirTreeNode): string =
         links = links & separator & "<a href=\"" & link.getStr() & "\">" & label & "</a>"
         addSeparator = true
     
-    echo "[LINKS] " & links
+    #echo "[LINKS] " & links
     return links
+
+
+proc genPath(node: DirTreeNode): string =
+    if node.parent == nil: return "/"
+    var path = genPath(node.parent) & node.name
+    if node.kind == itemDir: path = path & '/'
+    return path
 
 
 proc convertMarkdownToNercPage(tree: DirTreeNode) =
@@ -134,14 +142,14 @@ proc convertMarkdownToNercPage(tree: DirTreeNode) =
     let mdFile  = readFile(tree.path[2..^1])
     
     var htmlTxt = DefaultTemplate
-    if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace(PageTitleTag,   tree.parent.getConfig("page title").getStr() & " - " & tree.name)
-    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace(LinksTag,       tree.parent.genLinks())
-    if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace(SiteTitleTag,   tree.parent.getConfig("site title").getStr())
-    if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace(SubtitleTag,    tree.parent.getConfig("subtitle").getStr())
-    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace(SidebarTag,     fsTree.genSidebar(tree))
-    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace(ContentTag,     mdFile.markdown())
-    if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace(FooterLeftTag,  tree.parent.getConfig("footer left").getStr())
-    if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace(FooterRightTag, tree.parent.getConfig("footer right").getStr())
+    if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace( PageTitleTag,   tree.parent.getConfig("page title").getStr() & " - " & tree.name )
+    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       tree.parent.genLinks()                         )
+    if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   tree.parent.getConfig("site title").getStr()   )
+    if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    tree.parent.getConfig("subtitle").getStr()     )
+    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace( SidebarTag,     fsTree.genSidebar(tree)                        )
+    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace( ContentTag,     mdFile.markdown()                              )
+    if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace( FooterLeftTag,  tree.parent.getConfig("footer left").getStr()  )
+    if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace( FooterRightTag, tree.parent.getConfig("footer right").getStr() )
     
     writefile(outPath, htmlTxt)
 
@@ -152,10 +160,13 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
     for kind, name in walkDir(path, relative = true):
         if name[0] == '.': continue # Skip hidden files and directories (such as .git)
         if kind == pcFile:
-            var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemFile, name: name.split('.')[0].replace('_', ' '), path: path & '/' & name, parent: node)
-            
+            var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemFile, name: name, path: path & '/' & name, parent: node)
+            echo "[FILE] " & name
             if name.toLowerAscii().endsWith(".md"):
                 new_node.fileKind = fileMarkdown
+                new_node.label = name.split('.')[0].replace('_', ' ')
+                echo "[LABEL] " & new_node.label
+                if "readme" == new_node.label.toLowerAscii(): node.hasIndex = new_node
                 #convertMarkdownToNercPage(path)
             elif name.toLowerAscii() == "config.json":
                 echo new_node.path[2..^1]
@@ -172,13 +183,16 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
             elif name.toLowerAscii().endsWith(".html"):
                 new_node.fileKind = fileHTML
             else: continue
-            
+            new_node.parent = node
             #echo "\t", path & "/" & name
             node.contents.add(new_node)
             
         elif kind == pcDir:
-            var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemDir, name: name, path: path & '/' & name, parent: node)
+            var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemDir, name: name, label: name.split('.')[0].replace('_', ' '), path: path & '/' & name, parent: node)
             #echo path & "/" & name
+            echo "[DIR] " & name
+            echo "[LABEL] " & new_node.label
+            new_node.parent = node
             buildDirTree(new_node, depth+1)
             node.contents.add(new_node)
 
@@ -205,38 +219,41 @@ proc genSidebar(tree: DirTreeNode, currentItem: DirTreeNode): string =
     
     if tree.kind == itemFile:
         var 
-            name = tree.name
-            path = tree.path[1..^1]
+            name  = tree.name
+            label = tree.label
+            path  = tree.genPath()
             
         if tree.fileKind != fileMarkdown and tree.fileKind != fileHTML: return ""
 
         if tree.fileKind == fileMarkdown:
-            path.removeSuffix("md")
-            path = path & "htm"
+            path.removeSuffix(".md")
+            path = path & ".htm"
             
-            if "readme" == toLowerAscii(name): return ""
+            if "readme" == toLowerAscii(label): return ""
         
-        if "index" == toLowerAscii(name): return ""
-        if tree == currentItem: name = ">> " & name & " <<"
+        if "index" == toLowerAscii(label): return ""
+        if tree == currentItem: label = ">> " & label & " <<"
 
         echo path
-        return repeat('\t', tree.depth) & "<li class=\"page\"><a href=\"" & path & "\">" & name & "</a></li>\n"
+        return repeat('\t', tree.depth) & "<li class=\"page\"><a href=\"" & path & "\">" & label & "</a></li>\n"
         
     elif tree.kind == itemDir:
         var 
             itemList: string
-            name = tree.name
-            path = tree.path[1..^1]
+            name  = tree.name
+            label = tree.label
+            path  = tree.genPath()
         
         #if tree.depth == 0: name = "Main"
-        if tree == currentItem: name = ">> " & name & " <<"
+        if tree.hasIndex == currentItem: label = ">> " & label & " <<"
         
         for item in tree.contents:
             itemList = itemList & genSidebar(item, currentItem)
         
-        echo path
+        echo "Generated Path: " & path
+        if tree.hasIndex != nil: label = "<a href=\"" & path & "\">" & label & "</a>\n"
         itemList = 
-            "<li class=\"dir\"><a href=\"" & path & "\">" & name & "</a>\n" & "<ul>\n" & 
+            "<li class=\"dir\">" & label & "<ul>\n" & 
             itemList & 
             "</ul>\n</li>"
 
@@ -256,7 +273,6 @@ proc populateDirs(treeRoot: DirTreeNode) =
 
 proc main() =
     let args       = commandLineParams()
-    let currentDir = "."
 
     if 0 < args.len:
         if isValidFileName(args[0]):
