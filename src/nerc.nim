@@ -1,3 +1,8 @@
+#[ TODO:
+    - Style inheritance
+    - Plop in a stylesheet if none is present
+    - Clean up the code a little, I guess
+]#
 import  
     json,
     macros, 
@@ -30,15 +35,19 @@ type
             style:    string
             config:   JsonNode
             hasIndex: DirTreeNode
+            hasCSS:   DirTreeNode
+            hasHTML:  DirTreeNode
         of itemFile:
             fileKind: FileKind
 
 
 proc getConfig(node: DirTreeNode, key: string): JsonNode {.inline.} 
+proc genLinks(node: DirTreeNode): string 
+proc genPath(node: DirTreeNode): string 
 proc removeSuffixInsensitive(s, suffix: string): string 
-proc convertMarkdownToNercPage(tree: DirTreeNode) 
+proc convertMarkdownToNercPage(node: DirTreeNode) 
 proc buildDirTree(node: DirTreeNode, depth: uint)
-proc printTree(tree: DirTreeNode) 
+proc printTree(node: DirTreeNode) 
 proc genSidebar( tree: DirTreeNode, currentItem: DirTreeNode): string
 proc populateDirs(treeRoot: DirTreeNode)
 
@@ -58,8 +67,14 @@ const
     DefaultStyle    = staticRead("res/styles.css")
     DefaultJson     = staticRead("res/config.json")
 
-let DefaultConfig   = parseJson(DefaultJson)
+var defaultconfig: JsonNode
 
+try:
+    defaultconfig = parseJson(DefaultJson)
+except JsonParsingError:
+    echo "[ERROR] Built-in config.json does not pass validation. Fix error and recompile."
+
+let DefaultConfig = defaultconfig
 
 var 
     pageTitle:       string
@@ -69,7 +84,7 @@ var
     htmlFooterLeft:  string
     htmlFooterRight: string
     
-    fsTree:          DirTreeNode = DirTreeNode(depth: 0, label: "Main", path: ".", kind: itemDir)
+    fsTree:          DirTreeNode = DirTreeNode(depth: 0, name: "Main", label: "Main", path: ".", kind: itemDir)
     
 
 fsTree.html   = DefaultTemplate
@@ -82,14 +97,24 @@ proc removeSuffixInsensitive(s, suffix: string): string =
         return s[0 ..< s.len - suffix.len]
     return s
 
+proc getTemplate(node: DirTreeNode): string =
+    if node.hasHTML != nil:
+        if node.html != "":
+            return node.html
 
-proc getConfig(node: DirTreeNode, key: string): JsonNode {.inline.} =
+    if node.parent != nil:
+        return node.parent.getTemplate()
+
+    return DefaultTemplate
+            
+
+proc getConfig(node: DirTreeNode, key: string): JsonNode =
     if not node.config.isNil:
         if node.config.hasKey(key):
             return node.config[key]
 
     if node.parent != nil:
-        return getConfig(node.parent, key)
+        return node.parent.getConfig(key)
 
     return DefaultConfig[key]
 
@@ -103,22 +128,28 @@ proc genLinks(node: DirTreeNode): string =
     if node.config.isNil: return node.parent.genLinks()
     let config:       JsonNode = node.getConfig("links")
     
-    if config.kind != JObject: 
-        #echo "[LINKS] Not generating links."
+    if config.kind != JArray: 
         return node.parent.genLinks()
 
-    for label, link in config.pairs():
+    for item in config:
+        if item.kind != JObject: continue
+        if not item.hasKey("label") and not item.hasKey("link"): continue
+        if item["label"].kind != JString: continue
+        if item["link"].kind  != JString: continue
+        let
+            label = item["label"].getStr()
+            link  = item["link"].getStr()
+        
         separator = if addSeparator: "&nbsp;|&nbsp;" else: ""
 
-        if label == "" and link.getStr() == "SPACER":
+        if label == "" and link == "SPACER":
             links = links & "<div class=\"spacer\" ></div>"
             addSeparator = false
             continue
         
-        links = links & separator & "<a href=\"" & link.getStr() & "\">" & label & "</a>"
+        links = links & separator & "<a href=\"" & link & "\">" & label & "</a>"
         addSeparator = true
     
-    #echo "[LINKS] " & links
     return links
 
 
@@ -129,29 +160,32 @@ proc genPath(node: DirTreeNode): string =
     return path
 
 
-proc convertMarkdownToNercPage(tree: DirTreeNode) =
-    echo tree.path[2..^1]  & " : " & tree.name & "\n"
-    if tree.kind == itemDir: return
+proc convertMarkdownToNercPage(node: DirTreeNode) =
+    if node.kind == itemDir: return
     
-    var outPath: string = tree.path[2..^1]
+    var outPath: string = node.path[2..^1]
     outPath.removeSuffix(".md")
     if toLowerAscii(outPath).endsWith("readme"): 
         outpath = outPath.removeSuffixInsensitive("readme") & "index"
     outPath = outPath & ".htm"
     
-    let mdFile  = readFile(tree.path[2..^1])
+    let mdFile  = readFile(node.path[2..^1])
     
-    var htmlTxt = DefaultTemplate
-    if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace( PageTitleTag,   tree.parent.getConfig("page title").getStr() & " - " & tree.name )
-    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       tree.parent.genLinks()                         )
-    if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   tree.parent.getConfig("site title").getStr()   )
-    if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    tree.parent.getConfig("subtitle").getStr()     )
-    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace( SidebarTag,     fsTree.genSidebar(tree)                        )
+    var 
+        htmlTxt = node.parent.getTemplate()
+        pageTitle: string = ""
+    if "readme" != node.label.toLowerAscii(): pageTitle = " - " & node.label
+    if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace( PageTitleTag,   node.parent.getConfig("page title").getStr() & pageTitle )
+    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       node.parent.genLinks()                         )
+    if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   node.parent.getConfig("site title").getStr()   )
+    if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    node.parent.getConfig("subtitle").getStr()     )
+    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace( SidebarTag,     fsTree.genSidebar(node)                        )
     if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace( ContentTag,     mdFile.markdown()                              )
-    if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace( FooterLeftTag,  tree.parent.getConfig("footer left").getStr()  )
-    if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace( FooterRightTag, tree.parent.getConfig("footer right").getStr() )
+    if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace( FooterLeftTag,  node.parent.getConfig("footer left").getStr()  )
+    if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace( FooterRightTag, node.parent.getConfig("footer right").getStr() )
     
     writefile(outPath, htmlTxt)
+    echo "[GENERATED]: ", outPath
 
 
 proc buildDirTree(node: DirTreeNode, depth: uint) =
@@ -161,55 +195,56 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
         if name[0] == '.': continue # Skip hidden files and directories (such as .git)
         if kind == pcFile:
             var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemFile, name: name, path: path & '/' & name, parent: node)
-            echo "[FILE] " & name
+            
             if name.toLowerAscii().endsWith(".md"):
                 new_node.fileKind = fileMarkdown
                 new_node.label = name.split('.')[0].replace('_', ' ')
-                echo "[LABEL] " & new_node.label
                 if "readme" == new_node.label.toLowerAscii(): node.hasIndex = new_node
                 #convertMarkdownToNercPage(path)
             elif name.toLowerAscii() == "config.json":
-                echo new_node.path[2..^1]
                 var file: string = readFile(new_node.path[2..^1])
-                echo file
-                node.config = parseJson(file)
+                try: 
+                    node.config = parseJson(file)
+                except JsonParsingError:
+                    echo "[ERROR] ", name, " at ", path, " did not pass validation and will be ignored." 
                 continue
+                
             elif name.toLowerAscii() == "template.htm":
                 node.html = readFile(new_node.path)
                 continue
+                
             elif name.toLowerAscii() == "styles.css":
                 
                 continue
+                
             elif name.toLowerAscii().endsWith(".html"):
                 new_node.fileKind = fileHTML
             else: continue
+            
             new_node.parent = node
-            #echo "\t", path & "/" & name
             node.contents.add(new_node)
             
         elif kind == pcDir:
             var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemDir, name: name, label: name.split('.')[0].replace('_', ' '), path: path & '/' & name, parent: node)
-            #echo path & "/" & name
-            echo "[DIR] " & name
-            echo "[LABEL] " & new_node.label
             new_node.parent = node
             buildDirTree(new_node, depth+1)
             node.contents.add(new_node)
 
 
-proc printTree(tree: DirTreeNode) =
-    if tree.kind == itemFile:
-        
-        case tree.fileKind
-        of fileMarkdown: echo tree.depth, repeat('\t', tree.depth), tree.name, " : Markdown"
-        of fileJSON:     echo tree.depth, repeat('\t', tree.depth), tree.name, " : JSON"
-        of fileTemplate: echo tree.depth, repeat('\t', tree.depth), tree.name, " : Template"
-        of fileHTML:     echo tree.depth, repeat('\t', tree.depth), tree.name, " : HTML"
+proc printTree(node: DirTreeNode) =
+    if node.kind == itemFile:
+        var fileType: string
+        case node.fileKind
+        of fileMarkdown: fileType = "Markdown"
+        of fileJSON:     fileType = "JSON"
+        of fileTemplate: fileType = "Template"
+        of fileHTML:     fileType = "HTML"
+        echo "[FILE]", repeat('\t', node.depth), node.name, " : "
     
-    elif tree.kind == itemDir:
-        echo repeat('\t', tree.depth), tree.path, " : ", tree.name, " : ", tree.contents.len()
+    elif node.kind == itemDir:
+        echo "[DIR]", repeat('\t', node.depth), node.path, " : ", node.name, " : ", node.contents.len()
         
-        for item in tree.contents:
+        for item in node.contents:
             printTree(item)
             continue
 
@@ -233,8 +268,7 @@ proc genSidebar(tree: DirTreeNode, currentItem: DirTreeNode): string =
         
         if "index" == toLowerAscii(label): return ""
         if tree == currentItem: label = ">> " & label & " <<"
-
-        echo path
+        
         return repeat('\t', tree.depth) & "<li class=\"page\"><a href=\"" & path & "\">" & label & "</a></li>\n"
         
     elif tree.kind == itemDir:
@@ -250,7 +284,6 @@ proc genSidebar(tree: DirTreeNode, currentItem: DirTreeNode): string =
         for item in tree.contents:
             itemList = itemList & genSidebar(item, currentItem)
         
-        echo "Generated Path: " & path
         if tree.hasIndex != nil: label = "<a href=\"" & path & "\">" & label & "</a>\n"
         itemList = 
             "<li class=\"dir\">" & label & "<ul>\n" & 
@@ -278,8 +311,11 @@ proc main() =
         if isValidFileName(args[0]):
             echo args[0]
 
+    echo "Scanning..."
     buildDirTree(fsTree, 1)
     printTree(fsTree)
+    echo "\nGenerating pages..."
     populateDirs(fsTree)
+    echo "\nDone!"
 
 main()
