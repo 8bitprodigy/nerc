@@ -1,6 +1,5 @@
 #[ TODO:
-    - Style inheritance
-    - Plop in a stylesheet if none is present
+    - command line arguments
     - Clean up the code a little, I guess
 ]#
 import  
@@ -32,7 +31,6 @@ type
         of itemDir:
             contents: seq[DirTreeNode]
             html:     string
-            style:    string
             config:   JsonNode
             hasIndex: DirTreeNode
             hasCSS:   DirTreeNode
@@ -54,7 +52,7 @@ proc populateDirs(treeRoot: DirTreeNode)
 
 const
     PageTitleTag:     string = "<!--page title-->"
-    StyleOverrideTag: string = "<!--style override-->"
+    StylesTag:        string = "<!--styles-->"
     LinksTag:         string = "<!--links-->"
     SiteTitleTag:     string = "<!--site title-->"
     SubtitleTag:      string = "<!--subtitle-->"
@@ -64,7 +62,7 @@ const
     FooterRightTag:   string = "<!--footer right-->"
     
     DefaultTemplate = staticRead("res/template.htm")
-    DefaultStyle    = staticRead("res/styles.css")
+    DefaultStyles    = staticRead("res/styles.css")
     DefaultJson     = staticRead("res/config.json")
 
 var defaultconfig: JsonNode
@@ -84,11 +82,10 @@ var
     htmlFooterLeft:  string
     htmlFooterRight: string
     
-    fsTree:          DirTreeNode = DirTreeNode(depth: 0, name: "Main", label: "Main", path: ".", kind: itemDir)
+    fsTree:          DirTreeNode = DirTreeNode(depth: 0, name: "", label: "Main", path: ".", kind: itemDir)
     
 
 fsTree.html   = DefaultTemplate
-fsTree.style  = DefaultStyle
 fsTree.config = DefaultConfig
 
 
@@ -96,6 +93,7 @@ proc removeSuffixInsensitive(s, suffix: string): string =
     if s.toLowerAscii().endsWith(suffix.toLowerAscii()):
         return s[0 ..< s.len - suffix.len]
     return s
+
 
 proc getTemplate(node: DirTreeNode): string =
     if node.hasHTML != nil:
@@ -117,6 +115,15 @@ proc getConfig(node: DirTreeNode, key: string): JsonNode =
         return node.parent.getConfig(key)
 
     return DefaultConfig[key]
+
+
+proc getStyles(node: DirTreeNode): string =
+    if node.hasCSS != nil:
+        let styles: string = if node.parent!=nil: node.parent.getStyles() else: ""
+        return styles & "\n@import url(\"" & node.genPath() & "styles.css\");"
+    if node.parent != nil:
+        return node.parent.getStyles()
+    return ""
 
 
 proc genLinks(node: DirTreeNode): string =
@@ -143,7 +150,7 @@ proc genLinks(node: DirTreeNode): string =
         separator = if addSeparator: "&nbsp;|&nbsp;" else: ""
 
         if label == "" and link == "SPACER":
-            links = links & "<div class=\"spacer\" ></div>"
+            links = links & "<span class=\"spacer\" ></span>"
             addSeparator = false
             continue
         
@@ -176,6 +183,7 @@ proc convertMarkdownToNercPage(node: DirTreeNode) =
         pageTitle: string = ""
     if "readme" != node.label.toLowerAscii(): pageTitle = " - " & node.label
     if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace( PageTitleTag,   node.parent.getConfig("page title").getStr() & pageTitle )
+    if htmlTxt.contains(StylesTag):       htmlTxt = htmlTxt.replace( StylesTag,      node.parent.getStyles()                               )
     if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       node.parent.genLinks()                         )
     if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   node.parent.getConfig("site title").getStr()   )
     if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    node.parent.getConfig("subtitle").getStr()     )
@@ -192,14 +200,15 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
     let path = node.path 
     
     for kind, name in walkDir(path, relative = true):
-        if name[0] == '.': continue # Skip hidden files and directories (such as .git)
+        if name[0] == '.' or name[0] == '_': continue # Skip hidden files and directories (such as .git)
         if kind == pcFile:
             var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemFile, name: name, path: path & '/' & name, parent: node)
             
             if name.toLowerAscii().endsWith(".md"):
                 new_node.fileKind = fileMarkdown
                 new_node.label = name.split('.')[0].replace('_', ' ')
-                if "readme" == new_node.label.toLowerAscii(): node.hasIndex = new_node
+                if "readme" == new_node.label.toLowerAscii(): 
+                    node.hasIndex = new_node
                 #convertMarkdownToNercPage(path)
             elif name.toLowerAscii() == "config.json":
                 var file: string = readFile(new_node.path[2..^1])
@@ -210,11 +219,12 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
                 continue
                 
             elif name.toLowerAscii() == "template.htm":
-                node.html = readFile(new_node.path)
+                node.hasHTML = new_node
+                node.html    = readFile(new_node.path)
                 continue
                 
             elif name.toLowerAscii() == "styles.css":
-                
+                node.hasCSS = new_node
                 continue
                 
             elif name.toLowerAscii().endsWith(".html"):
@@ -313,6 +323,7 @@ proc main() =
 
     echo "Scanning..."
     buildDirTree(fsTree, 1)
+    if fsTree.hasCSS == nil: writefile("styles.css", DefaultStyles)
     printTree(fsTree)
     echo "\nGenerating pages..."
     populateDirs(fsTree)
