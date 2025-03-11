@@ -106,6 +106,14 @@ In order for content to be inserted into the page during generation, you'll need
 
 ## Building
 
+Be sure to have [Nim-markdown](https://github.com/soasme/nim-markdown) installed first:
+
+```shell
+nimble install markdown
+```
+
+Then:
+
 ```shell
 git clone https://github.com/8bitprodigy/nerc 
 cd nerc
