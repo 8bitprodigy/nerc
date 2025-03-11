@@ -104,6 +104,30 @@ In order for content to be inserted into the page during generation, you'll need
 
 
 
+## Building
+
+```shell
+git clone https://github.com/8bitprodigy/nerc 
+cd nerc
+nimble build
+```
+
+## 
+
+## Installation
+
+```shell
+install nerc /usr/local/bin
+```
+
+ Or:
+
+```shell
+install nerc ~/.local/bin
+```
+
+## 
+
 ## License:
 
 This code is dedicated to the public domain, but is also made available under the terms of the 0-clause BSD license, as some jurisdictions do not recognize the public domain.
