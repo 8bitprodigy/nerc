@@ -7,6 +7,7 @@ import
     macros, 
     markdown, 
     os, 
+    sequtils,
     strutils, 
     terminal
 
@@ -89,6 +90,26 @@ fsTree.html   = DefaultTemplate
 fsTree.config = DefaultConfig
 
 
+proc getDirectorySorted(dir: string): seq[tuple[kind: PathComponent, path: string]] =
+    # Create sequences to store directories and files
+    var dirs: seq[tuple[kind: PathComponent, path: string]] = @[]
+    var files: seq[tuple[kind: PathComponent, path: string]] = @[]
+
+    # Walk through directory contents
+    for ikind, ipath in walkDir(dir,relative=true):
+        case ikind
+        of pcDir:
+            # Skip current and parent directories
+            if not (ipath.endsWith("/.") or ipath.endsWith("/..")):
+                dirs.add((ikind, ipath))
+        of pcFile:
+            files.add((ikind, ipath))
+        else:
+            continue
+
+    result.concat(dirs, files)
+ 
+    
 proc removeSuffixInsensitive(s, suffix: string): string =
     if s.toLowerAscii().endsWith(suffix.toLowerAscii()):
         return s[0 ..< s.len - suffix.len]
@@ -197,10 +218,12 @@ proc convertMarkdownToNercPage(node: DirTreeNode) =
 
 
 proc buildDirTree(node: DirTreeNode, depth: uint) =
-    let path = node.path 
+    let 
+        path  = node.path 
+        files = getDirectorySorted(path)
     
-    for kind, name in walkDir(path, relative = true):
-        if name[0] == '.' or name[0] == '_': continue # Skip hidden files and directories (such as .git)
+    for (kind, name) in files:
+        if name.startsWith(".") or name.startsWith("_"): continue # Skip hidden files and directories (such as .git)
         if kind == pcFile:
             var new_node: DirTreeNode = DirTreeNode(depth: depth, kind: itemFile, name: name, path: path & '/' & name, parent: node)
             

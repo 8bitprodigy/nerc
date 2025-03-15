@@ -6,14 +6,9 @@ Web anti-framework in Nim.
 
 Too many web frameworks are written in slow, heavy, bloated interpreted languages, so this is an *anti*-framework written in a fast, lightweight, and *nim*ble compiled language.
 
-
-
 ## Function
 
 Converts markdown files into html files on a directory basis.
-
-
-
 
 ## Usage
 
@@ -28,6 +23,8 @@ Then upload the contents of that directory to the root of your website's hosting
 ### Things to note
 
 - `readme.md`(case insensitive) files will become `index.htm` files so you can use github hosting for your website, and people visiting the repo will get more or less the same experience.
+
+- File and directory names become page titles with underscores turned into spaces, so `My_Portfolio.md` will be given the page name `My Portfolio` when linked in the sidebar and after the site title in the browser titebar/tab.
 
 - Files and directories starting with a `.` will be ignored for linkage.
 
@@ -101,8 +98,6 @@ In order for content to be inserted into the page during generation, you'll need
 | `<!--content-->`      | Inserts the contents of the markdown document, rendered as HMTL elements.                                                         |
 | `<!--footer left-->`  | Inserts the string defined by "footer left" in `config.json`.                                                                     |
 | `<!--footer right-->` | Inserts the string defined by "footer right" in `config.json`.                                                                    |
-
-
 
 ## Building
 
