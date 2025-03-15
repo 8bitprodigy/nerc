@@ -1,10 +1,10 @@
 # nerc
 
-Web anti-framework in Nim.
+Anti-web anti-framework in Nim.
 
 ## Rationale
 
-Too many web frameworks are written in slow, heavy, bloated interpreted languages, so this is an *anti*-framework written in a fast, lightweight, and *nim*ble compiled language.
+Too many web frameworks are written in slow, heavy, bloated interpreted languages, reflective of most of web technologies, so this is an *anti*-web *anti*-framework written in a fast, lightweight, and *nim*ble compiled language.
 
 ## Function
 
@@ -26,7 +26,7 @@ Then upload the contents of that directory to the root of your website's hosting
 
 - File and directory names become page titles with underscores turned into spaces, so `My_Portfolio.md` will be given the page name `My Portfolio` when linked in the sidebar and after the site title in the browser titebar/tab.
 
-- Files and directories starting with a `.` will be ignored for linkage.
+- Files and directories starting with a `.` or `_` will be ignored for linkage to ensure directories like `.git/` don't get scanned.
 
 - Directories that don't contain a `readme.md` will not be linkified in the sidebar, but any `.md` documents they contain will be.
 
@@ -41,13 +41,13 @@ Options can be overridden on a per-directory basis. Each directory can have its 
 You'll likely first wish to create your own `config.json` file to override the default settings built in to `nerc`.
 This is a list of the various config options:
 
-| **Key**        | **Value Type**                                                                               | **Description**                                                                                                                                                                                                |
-| -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "page title"   | string                                                                                       | Sets the page's title tag (in the browser window titlebar/tab).                                                                                                                                                |
-| "links"        | array of JSON objects: `{"label": [string to hyperlink], "link":[string of URL to link to]}` | Sets the links that appear at the top of the page. Spacers can be inserted by inserting the following JSON object: `{"label": "", "link": "SPACER"}`                                                           |
-| "site title"   | string                                                                                       | Sets the title at the top of each page, below the links row.                                                                                                                                                   |
-| "subtitle"     | string                                                                                       | Sets the subtitle for the site that appears next to the title.                                                                                                                                                 |
-| "footer right" | string                                                                                       | Sets the text string that is inserted into the footer at the bottom of the page on the right. You can insert HTML into this portion for formatting effects, or if you'd like to add a search bar or something. |
+| **Key**          | **Value Type**                                                                               | **Description**                                                                                                                                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"page title"`   | string                                                                                       | Sets the page's title tag (in the browser window titlebar/tab).                                                                                                                                                |
+| `"links"`        | array of JSON objects: `{"label": [string to hyperlink], "link":[string of URL to link to]}` | Sets the links that appear at the top of the page. Spacers can be inserted by inserting the following JSON object: `{"label": "", "link": "SPACER"}`                                                           |
+| `"site title"`   | string                                                                                       | Sets the title at the top of each page, below the links row.                                                                                                                                                   |
+| `"subtitle"`     | string                                                                                       | Sets the subtitle for the site that appears next to the title.                                                                                                                                                 |
+| `"footer right"` | string                                                                                       | Sets the text string that is inserted into the footer at the bottom of the page on the right. You can insert HTML into this portion for formatting effects, or if you'd like to add a search bar or something. |
 
 Only defined config options will be overridden, so any settings not defined in a directory's `config.json` file will be inherited either from their parent's directory, or from the default settings defined in `nerc`.
 
@@ -70,17 +70,17 @@ Styles are overridden by including each `styles.css` along the path to whatever 
 So as to allow individual styles to be overridden on a per-directory basis.
 Here are a list of classes and IDs which can be styled:
 
-| Class/ID   | Description                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------- |
-| .spacer    | Styles spacers used to separate links and the left and right text in the footer.            |
-| .nerc      | Styles shared by every element that generated content gets inserted to in the visible page. |
-| #container | Element containing all the elements of the page.                                            |
-| #links     | Element containing links at the top of the page.                                            |
-| #header    | Element containing the Page Title and Subtitle.                                             |
-| #body      | Element containing Sidebar and Content.                                                     |
-| #sidebar   | Element containing an unordered list linking to different pages and directories.            |
-| #content   | Element containing the contents of the document, rendered as HTML                           |
-| #footer    | Element containing the footer contents.                                                     |
+| **Class/ID** | ** Description**                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `.spacer`    | Styles spacers used to separate links and the left and right text in the footer.            |
+| `.nerc`      | Styles shared by every element that generated content gets inserted to in the visible page. |
+| `#container` | Element containing all the elements of the page.                                            |
+| `#links`     | Element containing links at the top of the page.                                            |
+| `#header`    | Element containing the Page Title and Subtitle.                                             |
+| `#body`      | Element containing Sidebar and Content.                                                     |
+| `#sidebar`   | Element containing an unordered list linking to different pages and directories.            |
+| `#content`   | Element containing the contents of the document, rendered as HTML                           |
+| `#foote`     | Element containing the footer contents.                                                     |
 
 ### template.htm
 
