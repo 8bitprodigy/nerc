@@ -1,6 +1,6 @@
 {
     "index":        "$readme",
-    "sort":         "newest",
+    "sort":         "alphabetic",
     "page title":   "Default nerc site",
     "links": [
         {"label": "Main", "link": "/"},
