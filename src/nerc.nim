@@ -3,18 +3,23 @@
     - Clean up the code a little, I guess
 ]#
 import  
+    algorithm,
     json,
     macros, 
     markdown, 
+    options,
     os, 
+    posix,
     sequtils,
     strutils, 
-    terminal
+    terminal,
+    times
 
 
 type
     ItemKind = enum
-        itemFile, itemDir
+        itemFile, 
+        itemDir
 
     FileKind = enum
         fileMarkdown,
@@ -38,9 +43,10 @@ type
             hasHTML:  DirTreeNode
         of itemFile:
             fileKind: FileKind
+            date: times.Time
 
 
-proc getConfig(node: DirTreeNode, key: string): JsonNode {.inline.} 
+proc getConfig(node: DirTreeNode, key: string): JsonNode
 proc genLinks(node: DirTreeNode): string 
 proc genPath(node: DirTreeNode): string 
 proc removeSuffixInsensitive(s, suffix: string): string 
@@ -90,6 +96,17 @@ fsTree.html   = DefaultTemplate
 fsTree.config = DefaultConfig
 
 
+proc getLatestNode(nodes: seq[DirTreeNode]): DirTreeNode =
+    result = nil
+    for node in nodes:
+        if node.kind == itemFile:
+            if result == nil:
+                result = node
+            elif node.date > result.date:
+                result = node
+
+
+
 proc getDirectorySorted(dir: string): seq[tuple[kind: PathComponent, path: string]] =
     # Create sequences to store directories and files
     var dirs: seq[tuple[kind: PathComponent, path: string]] = @[]
@@ -127,7 +144,7 @@ proc getTemplate(node: DirTreeNode): string =
     return DefaultTemplate
             
 
-proc getConfig(node: DirTreeNode, key: string): JsonNode =
+proc getConfig(node: DirTreeNode, key: string): JsonNode = 
     if not node.config.isNil:
         if node.config.hasKey(key):
             return node.config[key]
@@ -190,11 +207,16 @@ proc genPath(node: DirTreeNode): string =
 
 proc convertMarkdownToNercPage(node: DirTreeNode) =
     if node.kind == itemDir: return
+    let config: string = node.parent.getConfig("index").getStr()
     
     var outPath: string = node.path[2..^1]
-    outPath.removeSuffix(".md")
-    if toLowerAscii(outPath).endsWith("readme"): 
-        outpath = outPath.removeSuffixInsensitive("readme") & "index"
+    outPath = outPath.removeSuffixInsensitive(".md")
+    if config[0]=='$' and 
+            node.name.toLowerAscii().startsWith(config[1..^1]):
+        outpath = outPath.removeSuffixInsensitive(config[1..^1]) & "index"
+    elif config == "newest" and
+            node == node.parent.contents.getLatestNode():
+        outpath = outpath.removeSuffixInsensitive(node.name.removeSuffixInsensitive(".md")) & "index"
     outPath = outPath & ".htm"
     
     let mdFile  = readFile(node.path[2..^1])
@@ -204,14 +226,14 @@ proc convertMarkdownToNercPage(node: DirTreeNode) =
         pageTitle: string = ""
     if "readme" != node.label.toLowerAscii(): pageTitle = " - " & node.label
     if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace( PageTitleTag,   node.parent.getConfig("page title").getStr() & pageTitle )
-    if htmlTxt.contains(StylesTag):       htmlTxt = htmlTxt.replace( StylesTag,      node.parent.getStyles()                               )
-    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       node.parent.genLinks()                         )
-    if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   node.parent.getConfig("site title").getStr()   )
-    if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    node.parent.getConfig("subtitle").getStr()     )
-    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace( SidebarTag,     fsTree.genSidebar(node)                        )
-    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace( ContentTag,     mdFile.markdown()                              )
-    if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace( FooterLeftTag,  node.parent.getConfig("footer left").getStr()  )
-    if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace( FooterRightTag, node.parent.getConfig("footer right").getStr() )
+    if htmlTxt.contains(StylesTag):       htmlTxt = htmlTxt.replace( StylesTag,      node.parent.getStyles()                                  )
+    if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       node.parent.genLinks()                                   )
+    if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   node.parent.getConfig("site title").getStr()             )
+    if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    node.parent.getConfig("subtitle").getStr()               )
+    if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace( SidebarTag,     fsTree.genSidebar(node)                                  )
+    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace( ContentTag,     mdFile.markdown()                                        )
+    if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace( FooterLeftTag,  node.parent.getConfig("footer left").getStr()            )
+    if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace( FooterRightTag, node.parent.getConfig("footer right").getStr()           )
     
     writefile(outPath, htmlTxt)
     echo "[GENERATED]: ", outPath
@@ -253,7 +275,7 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
             elif name.toLowerAscii().endsWith(".html"):
                 new_node.fileKind = fileHTML
             else: continue
-            
+            new_node.date = getCreationTime(new_node.path)
             new_node.parent = node
             node.contents.add(new_node)
             
@@ -262,6 +284,16 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
             new_node.parent = node
             buildDirTree(new_node, depth+1)
             node.contents.add(new_node)
+
+    let sortMode = node.getConfig("sort").getStr()
+    if sortMode == "newest":
+        var sortedSeq: seq[DirTreeNode] = @[node.contents[0]]
+        let size =  node.contents.len
+        while sortedSeq.len < size:
+            let latestNode: DirTreeNode = node.contents.getLatestNode()
+            sortedSeq.add(latestNode)
+            node.contents.delete(node.contents.find(latestNode))
+        node.contents = sortedSeq.reversed()
 
 
 proc printTree(node: DirTreeNode) =
