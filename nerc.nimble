@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.1.5"
+version       = "1.2.0"
 author        = "8bitprodigy"
 description   = "A simple web anti-framework written in Nim."
 license       = "0BSD"

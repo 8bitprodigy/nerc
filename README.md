@@ -34,7 +34,7 @@ Then upload the contents of that directory to the root of your website's hosting
 
 ## Options
 
-Options can be overridden on a per-directory basis. Each directory can have its own `config.json`, `styles.css`, and `template.htm`, overriding one or more of a parent directory's  settings.
+Options can be overridden on a per-directory basis. Each directory can have its own `config.json`, `styles.css`, and `template.html`, overriding one or more of a parent directory's  settings.
 
 ### config.json
 
@@ -49,6 +49,9 @@ This is a list of the various config options:
 | `"links"`        | array of JSON objects: `{"label": [string to hyperlink], "link":[string of URL to link to]}`                                                                         | Sets the links that appear at the top of the page. Spacers can be inserted by inserting the following JSON object: `{"label": "", "link": "SPACER"}`                                                           |
 | `"site title"`   | string                                                                                                                                                               | Sets the title at the top of each page, below the links row.                                                                                                                                                   |
 | `"subtitle"`     | string                                                                                                                                                               | Sets the subtitle for the site that appears next to the title.                                                                                                                                                 |
+| `"upper nav"`    | bool (default: `false`)                                                                                                                                              | If true inserts previous/next navigation links at the top of the document to navigate to other documents within the current directory                                                                          |
+| `"doc title"`    | bool (default: `true`)                                                                                                                                               | If true, inserts the document's formatted file name (underscores and file extension removed) into the top of the document in a `<h1>` tag.                                                                     |
+| `"lower nav"`    | bool (default: `false`)                                                                                                                                              | If true inserts previous/next navigation links at the bottom of the document to navigate to other documents within the current directory                                                                       |
 | `"footer right"` | string                                                                                                                                                               | Sets the text string that is inserted into the footer at the bottom of the page on the right. You can insert HTML into this portion for formatting effects, or if you'd like to add a search bar or something. |
 
 Only defined config options will be overridden, so any settings not defined in a directory's `config.json` file will be inherited either from their parent's directory, or from the default settings defined in `nerc`.
@@ -84,9 +87,9 @@ Here are a list of classes and IDs which can be styled:
 | `#content`   | Element containing the contents of the document, rendered as HTML                           |
 | `#foote`     | Element containing the footer contents.                                                     |
 
-### template.htm
+### template.html
 
-Like `config.json`, pages in a directory will use the last defined template up the chain of directories back to the root. Unlike `config.json` and `styles.css`,  however, `template.htm` overrides the whole page, so if you wish to override it, you'll have to define the whole page layout.
+Like `config.json`, pages in a directory will use the last defined template up the chain of directories back to the root. Unlike `config.json` and `styles.css`,  however, `template.html` overrides the whole page, so if you wish to override it, you'll have to define the whole page layout.
 In order for content to be inserted into the page during generation, you'll need to declare the following tokens in your template:
 
 | **Tag**               | **Description**                                                                                                                   |

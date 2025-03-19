@@ -12,6 +12,7 @@ body {
 }
 
 .spacer {
+    display: flex;
     flex-grow: 1;
 }
 

@@ -58,6 +58,8 @@ proc populateDirs(treeRoot: DirTreeNode)
 
 
 const
+    Spacer:           string = "<span class=\"spacer\" ></span>"
+    
     PageTitleTag:     string = "<!--page title-->"
     StylesTag:        string = "<!--styles-->"
     LinksTag:         string = "<!--links-->"
@@ -68,7 +70,7 @@ const
     FooterLeftTag:    string = "<!--footer left-->"
     FooterRightTag:   string = "<!--footer right-->"
     
-    DefaultTemplate = staticRead("res/template.htm")
+    DefaultTemplate = staticRead("res/template.html")
     DefaultStyles    = staticRead("res/styles.css")
     DefaultJson     = staticRead("res/config.json")
 
@@ -94,6 +96,40 @@ var
 
 fsTree.html   = DefaultTemplate
 fsTree.config = DefaultConfig
+
+
+proc genNav(node: DirTreeNode): string =
+    let
+        size    = node.parent.contents.len
+        nodeIdx = node.parent.contents.find(node)
+        prev    = nodeIdx + 1
+        next    = nodeIDX - 1
+        hasPrev = prev < size
+        hasNext = 0 <= next
+
+    if not (hasPrev or hasNext): return ""
+
+    result = "<span class=\"spacer\">"
+    
+    if hasPrev:
+        let prevNode = node.parent.contents[prev]
+        var path     = prevNode.genPath().removeSuffixInsensitive(".md") 
+        if node.parent.hasIndex == prevNode: path = path.removeSuffixInsensitive(prevNode.name.removeSuffixInsensitive(".md")) & "index"
+        if      prevNode.kind     == itemFile and 
+                prevNode.fileKind == fileMarkdown:
+            result = result & "<a href=\"" & path & ".htm\"><-&nbsp;Prev</a>"
+            
+    result = result & Spacer
+    
+    if hasNext:
+        let nextNode = node.parent.contents[next]
+        var path     = nextNode.genPath().removeSuffixInsensitive(".md") 
+        if node.parent.hasIndex == nextNode: path = path.removeSuffixInsensitive(nextNode.name.removeSuffixInsensitive(".md")) & "index"
+        if      nextNode.kind     == itemFile and
+                nextNode.fileKind == fileMarkdown:
+            result = result & "<a href=\"" & path & ".htm\">Next&nbsp;-></a>"
+        
+    result = result & "</span>"
 
 
 proc getLatestNode(nodes: seq[DirTreeNode]): DirTreeNode =
@@ -188,7 +224,7 @@ proc genLinks(node: DirTreeNode): string =
         separator = if addSeparator: "&nbsp;|&nbsp;" else: ""
 
         if label == "" and link == "SPACER":
-            links = links & "<span class=\"spacer\" ></span>"
+            links = links & Spacer
             addSeparator = false
             continue
         
@@ -211,27 +247,42 @@ proc convertMarkdownToNercPage(node: DirTreeNode) =
     
     var outPath: string = node.path[2..^1]
     outPath = outPath.removeSuffixInsensitive(".md")
-    if config[0]=='$' and 
-            node.name.toLowerAscii().startsWith(config[1..^1]):
-        outpath = outPath.removeSuffixInsensitive(config[1..^1]) & "index"
-    elif config == "newest" and
-            node == node.parent.contents.getLatestNode():
-        outpath = outpath.removeSuffixInsensitive(node.name.removeSuffixInsensitive(".md")) & "index"
+    if node.parent.hasIndex == node:
+        if config[0]=='$':
+            outpath = outPath.removeSuffixInsensitive(config[1..^1]) & "index"
+        elif config == "newest":
+            outpath = outpath.removeSuffixInsensitive(node.name.removeSuffixInsensitive(".md")) & "index"
     outPath = outPath & ".htm"
     
-    let mdFile  = readFile(node.path[2..^1])
+    let 
+        mdFile   = readFile(node.path[2..^1])
+        navLinks = genNav(node)
     
     var 
         htmlTxt = node.parent.getTemplate()
         pageTitle: string = ""
-    if "readme" != node.label.toLowerAscii(): pageTitle = " - " & node.label
+        content: string   = ""
+
+    if node.parent.getConfig("upper nav").getBool():
+        content = content & navLinks & "\n<br />\n"
+
+    if node.parent.getConfig("doc title").getBool() and 
+            (node.parent.hasIndex != node):
+        content = content & "<h1>" & node.label & "</h1>\n"
+
+    content = content & mdFile.markdown()
+
+    if node.parent.getConfig("lower nav").getBool():
+        content = content & "\n<br />\n" & navLinks
+    
+    if node.parent.hasIndex != node: pageTitle = " - " & node.label
     if htmlTxt.contains(PageTitleTag):    htmlTxt = htmlTxt.replace( PageTitleTag,   node.parent.getConfig("page title").getStr() & pageTitle )
     if htmlTxt.contains(StylesTag):       htmlTxt = htmlTxt.replace( StylesTag,      node.parent.getStyles()                                  )
     if htmlTxt.contains(LinksTag):        htmlTxt = htmlTxt.replace( LinksTag,       node.parent.genLinks()                                   )
     if htmlTxt.contains(SiteTitleTag):    htmlTxt = htmlTxt.replace( SiteTitleTag,   node.parent.getConfig("site title").getStr()             )
     if htmlTxt.contains(SubtitleTag):     htmlTxt = htmlTxt.replace( SubtitleTag,    node.parent.getConfig("subtitle").getStr()               )
     if htmlTxt.contains(SidebarTag):      htmlTxt = htmlTxt.replace( SidebarTag,     fsTree.genSidebar(node)                                  )
-    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace( ContentTag,     mdFile.markdown()                                        )
+    if htmlTxt.contains(ContentTag):      htmlTxt = htmlTxt.replace( ContentTag,     content                                                  )
     if htmlTxt.contains(FooterLeftTag):   htmlTxt = htmlTxt.replace( FooterLeftTag,  node.parent.getConfig("footer left").getStr()            )
     if htmlTxt.contains(FooterRightTag):  htmlTxt = htmlTxt.replace( FooterRightTag, node.parent.getConfig("footer right").getStr()           )
     
@@ -251,9 +302,7 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
             
             if name.toLowerAscii().endsWith(".md"):
                 new_node.fileKind = fileMarkdown
-                new_node.label = name.split('.')[0].replace('_', ' ')
-                if "readme" == new_node.label.toLowerAscii(): 
-                    node.hasIndex = new_node
+                new_node.label = name.removeSuffixInsensitive(".md").replace('_', ' ')
                 #convertMarkdownToNercPage(path)
             elif name.toLowerAscii() == "config.json":
                 var file: string = readFile(new_node.path[2..^1])
@@ -263,7 +312,7 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
                     echo "[ERROR] ", name, " at ", path, " did not pass validation and will be ignored." 
                 continue
                 
-            elif name.toLowerAscii() == "template.htm":
+            elif name.toLowerAscii() == "template.html":
                 node.hasHTML = new_node
                 node.html    = readFile(new_node.path)
                 continue
@@ -285,6 +334,7 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
             buildDirTree(new_node, depth+1)
             node.contents.add(new_node)
 
+    
     let sortMode = node.getConfig("sort").getStr()
     if sortMode == "newest":
         var sortedSeq: seq[DirTreeNode] = @[node.contents[0]]
@@ -294,6 +344,17 @@ proc buildDirTree(node: DirTreeNode, depth: uint) =
             sortedSeq.add(latestNode)
             node.contents.delete(node.contents.find(latestNode))
         node.contents = sortedSeq.reversed()
+
+    let index = node.getConfig("index").getStr().toLowerAscii()
+    if index == "newest":
+        node.hasIndex = node.contents.getLatestNode()
+    elif index[0] == '$':
+        for e in node.contents:
+            if e.name.removeSuffixInsensitive(".md").toLowerAscii() == index[1..^1]:
+                node.hasIndex = e
+                break
+    if node.hasIndex != nil: node.hasIndex.label = "index"
+        
 
 
 proc printTree(node: DirTreeNode) =
