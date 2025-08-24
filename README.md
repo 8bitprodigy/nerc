@@ -140,12 +140,7 @@ install nerc ~/.local/bin
 
 This code is dedicated to the public domain, but is also made available under the terms of the 0-clause BSD license, as some jurisdictions do not recognize the public domain.
 
-The terms of the 0-clause BSD license are thus:
-
-```
-Copyright (C) 2025 Christopher DeBoy <chrisxdeboy@gmail.com>
-
-
+The terms of the 0-clause BSD license are thus:Copyright (C) 2025 Christopher DeBoy <chrisxdeboy@gmail.com>
 
 Permission to use, copy, modify, and/or distribute this software for  
 any purpose with or without fee is hereby granted.
@@ -157,4 +152,3 @@ FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
 DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN  
 AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT  
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-```

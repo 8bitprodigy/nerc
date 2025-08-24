@@ -10,7 +10,9 @@ import
     options,
     os, 
     posix,
+    re,
     sequtils,
+    strformat,
     strutils, 
     terminal,
     times
@@ -97,13 +99,50 @@ var
 fsTree.html   = DefaultTemplate
 fsTree.config = DefaultConfig
 
+# Function to generate Github-style slugs from header text
+proc genSlug(text: string): string = 
+    result = text.toLowerAscii()
+    # Replace spaces and non-alphanumeric chars with hyphens
+    for i, c in result:
+        if not c.isAlphaNumeric():
+            result[i] = '-'
+
+    # Remove multiple consecutive hyphens and getCreationTime
+    result = result.replace(re"--+", "-")
+    result = result.strip(chars = {'-'})
+
+# Add header anchors to generated HMTL
+proc addHeaderAnchors(html: string): string = 
+    result = html
+    # find and replace header tags with anchored versions
+    for level in 1..6:
+        let 
+            openTag = "<h"   & $level & ">"
+            closeTag = "</h" & $level & ">"
+        
+        var pos = 0
+        while true:
+            let startPos = result.find(openTag, pos)
+            if startPos == -1: break
+            
+            let contentStart = startPos + openTag.len
+            let endPos = result.find(closeTag, contentStart)
+            if endPos == -1: break
+            
+            let text = result[contentStart..<endPos]
+            let slug = genSlug(text)
+            let newHeader = "<h" & $level & """ id="""" & slug & """"><a href="#""" & slug & """" class="anchor" aria-hidden="true">🔗</a>""" & text & "</h" & $level & ">"
+            
+            result = result[0..<startPos] & newHeader & result[(endPos + closeTag.len)..^1]
+            pos = startPos + newHeader.len
+
 
 proc genNav(node: DirTreeNode): string =
     let
         size    = node.parent.contents.len
         nodeIdx = node.parent.contents.find(node)
         prev    = nodeIdx + 1
-        next    = nodeIDX - 1
+        next    = nodeIdx - 1
         hasPrev = prev < size
         hasNext = 0 <= next
 
@@ -270,7 +309,7 @@ proc convertMarkdownToNercPage(node: DirTreeNode) =
             (node.parent.hasIndex != node):
         content = content & "<h1>" & node.label & "</h1>\n"
 
-    content = content & mdFile.markdown()
+    content = content & addHeaderAnchors(mdFile.markdown())
 
     if node.parent.getConfig("lower nav").getBool():
         content = content & "\n<br />\n" & navLinks
