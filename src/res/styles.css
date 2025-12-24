@@ -85,17 +85,27 @@ body {
     border-bottom: 1px solid black;
     margin-bottom: 24px;
 }
+#content img {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: auto;
+}
 #content p {
     text-indent: 1.5em;
     display: block;
     max-width: 800px;
     margin: auto;
 }
-#content img {
-    display: block;
-    width: 100%;
-    height: auto;
-    margin: auto;
+#content table {
+  border-collapse: collapse;
+}
+#content table, td, th {
+    border: 1px black;
+    padding: 5px;
+}
+#content th, td {
+  padding: 5px;
 }
 
 #footer {
