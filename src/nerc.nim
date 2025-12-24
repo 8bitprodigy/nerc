@@ -309,7 +309,7 @@ proc convertMarkdownToNercPage(node: DirTreeNode) =
             (node.parent.hasIndex != node):
         content = content & "<h1>" & node.label & "</h1>\n"
 
-    content = content & addHeaderAnchors(mdFile.markdown())
+    content = content & addHeaderAnchors(mdFile.markdown(config=initGfmConfig()))
 
     if node.parent.getConfig("lower nav").getBool():
         content = content & "\n<br />\n" & navLinks
